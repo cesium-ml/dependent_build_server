@@ -4,6 +4,7 @@ import tornado.escape
 
 import toml
 import requests
+import github
 
 import os
 import sys
