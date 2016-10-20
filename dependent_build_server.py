@@ -71,9 +71,6 @@ class WebhookHandler(BaseHandler):
         base_repo = pr["base"]["repo"]["full_name"]
         commit_sha = pr['head']['sha']
 
-        repo = gh.get_repo(head_repo)
-        commit = repo.get_commit(commit_sha)
-
         dependent_repo = [
                 d['triggered_repo'] for d in config['dependent_repo']
                 if d['source_repo'] == base_repo
@@ -125,6 +122,10 @@ class WebhookHandler(BaseHandler):
         if r.status_code != 202:
             return self.error('Failed to create Travis-CI build')
 
+
+        # Add CI status to PR
+        repo = gh.get_repo(base_repo)
+        commit = repo.get_commit(commit_sha)
         commit.create_status(
                 'pending',
                 target_url='https://travis-ci.org/' + dependent_repo,
