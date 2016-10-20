@@ -59,8 +59,9 @@ class WebhookHandler(BaseHandler):
         personal_token = config['github']['personal_access_token']
 
         event_type = self.request.headers['X-GitHub-Event']
-        if event_type not in ['pull_request', 'push']:
-            return self.error('Unknown event sent to WebHook')
+        if event_type != 'pull_request':
+            return self.error('Unknown event sent to WebHook--expecing '
+                              'pull_request)
 
         pr = payload["pull_request"]
         gh = github.Github(personal_token)
