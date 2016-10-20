@@ -1,0 +1,20 @@
+# When an update is made to the source_repo, a build on the target_repo
+# is triggered.
+
+[[dependent_build]]
+source_repo = "org/source_repo"
+triggered_repo = "org/target_repo"
+
+[server]
+url = http://url.where.i.am.served
+
+[github]
+# This value is obtained from GitHub when you create a personal token for this
+# service
+personal_access_token = "..."
+
+# This secret you can generate using Python:
+#
+# >>> import binascii, os
+# >>> binascii.hexlify(os.urandom(24))
+webhook_secret = "..."
