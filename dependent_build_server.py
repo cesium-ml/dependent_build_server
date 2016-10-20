@@ -71,17 +71,17 @@ class WebhookHandler(BaseHandler):
         base_repo = pr["base"]["repo"]["full_name"]
         commit_sha = pr['head']['sha']
 
-        dependent_repo = [
+        triggered_repo = [
                 d['triggered_repo'] for d in config['dependent_repo']
                 if d['source_repo'] == base_repo
                 ]
 
-        if len(dependent_repo) == 0:
+        if len(triggered_repo) == 0:
             return self.error('No dependent repo set for ' \
                               '{}'.format(repo))
 
         # For now, we only support one triggered repo
-        dependent_repo = dependent_repo[0]
+        triggered_repo = triggered_repo[0]
 
         travis_headers = {
             'User-Agent': 'Travis-dependent_build_server/0.0'
@@ -100,8 +100,10 @@ class WebhookHandler(BaseHandler):
                 "branch": "master",
                 "config": {
                     "env": {
-                        "matrix": ["TRIGGERED_FROM_REPO={}".format(head_repo),
-                                   "TRIGGERED_FROM_SHA={}".format(commit_sha)]
+                        "global": [
+                            "TRIGGERED_FROM_REPO={}".format(head_repo),
+                            "TRIGGERED_FROM_SHA={}".format(commit_sha)
+                            ]
                     },
                     "notifications": {
                         "webhooks": [
@@ -114,7 +116,7 @@ class WebhookHandler(BaseHandler):
 
         r = requests.post(
             travis_api + '/repo/' + \
-            dependent_repo.replace('/', '%2F') + '/requests',
+            triggered_repo.replace('/', '%2F') + '/requests',
             headers={'Travis-API-Version': '3',
                      'Authorization': 'token "{}"'.format(travis_token)},
             json=build)
@@ -128,17 +130,22 @@ class WebhookHandler(BaseHandler):
         commit = repo.get_commit(commit_sha)
         commit.create_status(
                 'pending',
-                target_url='https://travis-ci.org/' + dependent_repo,
+                target_url='https://travis-ci.org/' + triggered_repo + \
+                           '/builds',
                 description='Triggered Travis-CI build ' \
-                            'of {}'.format(dependent_repo),
+                            'of {}'.format(triggered_repo),
                 context='continuous-integration/dependent-build-server')
 
         self.success()
 
 
+temp_log = []
+
 class TravisHandler(BaseHandler):
     def post(self):
-        payload = tornado.escape.json_decode(self.request.body)
+        # Verify the payload
+        payload = self.get_body_argument("payload")
+
         signature = base64.b64decode(
                 self.request.headers.get('Signature')
                 )
@@ -155,15 +162,27 @@ class TravisHandler(BaseHandler):
         except crypto.Error:
             return self.error('Invalid signature for Travis payload')
 
+        # Now decode and process
+        payload = tornado.escape.json_decode(payload)
+
         status = ("error" if (payload["status"] == "1")
                   else "success")
-        commit = payload["commit"]
-        repo = payload["repository"]["owner_name"] + "/" + \
-               payload["repository"]["name"]
+
+        sha = [f for f in payload["config"]["global_env"]
+               if 'TRIGGERED_FROM_SHA' in f][0]
+        sha = sha.split('=')[1]
+
+        triggered_repo = payload["repository"]["owner_name"] + "/" + \
+                         payload["repository"]["name"]
+
+        source_repo = [
+                d['source_repo'] for d in config['dependent_repo']
+                if d['triggered_repo'] == triggered_repo
+                ][0]
 
         gh = github.Github(config["github"]["personal_access_token"])
-        repo = gh.get_repo(repo)
-        commit = repo.get_commit(commit)
+        repo = gh.get_repo(source_repo)
+        commit = repo.get_commit(sha)
         commit.create_status(
                 status,
                 target_url=payload["build_url"],
@@ -171,8 +190,14 @@ class TravisHandler(BaseHandler):
                 context='continuous-integration/dependent-build-server')
 
 
+class Debug(BaseHandler):
+    def get(self):
+        self.write('\n'.join(temp_log))
+
+
 application = tornado.wsgi.WSGIApplication([
     (r"/", MainHandler),
     (r"/webhook", WebhookHandler),
-    (r"/travis", TravisHandler)
+    (r"/travis", TravisHandler),
+    (r"/debug", Debug)
 ])
