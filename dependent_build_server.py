@@ -37,8 +37,14 @@ class WebhookHandler(tornado.web.RequestHandler):
         self.write('Webhook alive and listening')
 
     def post(self):
+        if not 'X-Hub-Signature' in self.request.headers:
+            return self.write({
+                'status': 'error',
+                'message': 'WebHook not configured with secret'
+                })
+
         if not verify_signature(self.request.body,
-                                self.request.headers.get('X-Hub-Signature'),
+                                self.request.headers['X-Hub-Signature'],
                                 config['github']['webhook_secret']):
             return self.write(
                     {'status': 'error',
@@ -49,7 +55,7 @@ class WebhookHandler(tornado.web.RequestHandler):
         payload = json["payload"]
         personal_token = config['github']['personal_access_token']
 
-        event_type = self.request.headers.get('X-GitHub-Event')
+        event_type = self.request.headers['X-GitHub-Event']
 
 
         if event_type == 'pull_request':
