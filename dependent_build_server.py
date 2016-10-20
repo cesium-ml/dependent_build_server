@@ -66,11 +66,13 @@ class WebhookHandler(BaseHandler):
 
         pr = payload["pull_request"]
         gh = github.Github(personal_token)
-        repo = gh.get_repo(pr["repo"]["full_name"])
+        repo = gh.get_repo(pr["head"]["repo"]["full_name"])
         commit = repo.get_commit(pr['head']['sha'])
 
-        dependent_repo = [d['triggered_repo'] for d in config['dependent_repo']
-                          if d['source_repo'] == repo]
+        dependent_repo = [
+                d['triggered_repo'] for d in config['dependent_repo']
+                if d['source_repo'] == pr["base"]["repo"]["full_name"]
+                ]
 
         if len(dependent_repo) == 0:
             return self.error('No dependent repo set for ' \
