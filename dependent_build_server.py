@@ -8,6 +8,9 @@ import requests
 import os
 import sys
 import hmac
+import base64
+
+from OpenSSL import crypto
 
 
 if not os.path.exists('config.toml'):
@@ -66,14 +69,6 @@ class WebhookHandler(tornado.web.RequestHandler):
             # For now, we only support one triggered repo
             dependent_repo = dependent_repo[0]
 
-            commit.create_status(
-                    'pending',
-                    target_url=config['server']['url'] + '/travis',
-                    description='Triggering Travis-CI build ' \
-                                'of {}'.format(dependent_repo),
-                    context='continuous-integration/dependent-build-server')
-
-
             travis_headers = {
                 'User-Agent': 'Travis-dependent_build_server/0.0'
             }
@@ -93,6 +88,11 @@ class WebhookHandler(tornado.web.RequestHandler):
                         "env": {
                             "matrix": ["CESIUM_REPO={}".format(),
                                        "CESIUM_SHA={}".format()]
+                        },
+                        "notifications": {
+                            "webhooks": [
+                                config['server']['url'] + '/travis'
+                                ],
                         }
                     }
                 }
@@ -109,6 +109,12 @@ class WebhookHandler(tornado.web.RequestHandler):
                 self.write({'status': 'error',
                             'message': 'Failed to create Travis-CI build'})
 
+            commit.create_status(
+                    'pending',
+                    target_url='https://travis-ci.org/' + dependent_repo,
+                    description='Triggered Travis-CI build ' \
+                                'of {}'.format(dependent_repo),
+                    context='continuous-integration/dependent-build-server')
         else:
             pass
 
@@ -117,7 +123,39 @@ class WebhookHandler(tornado.web.RequestHandler):
 
 class TravisHandler(tornado.web.RequestHandler):
     def post(self):
-        json = tornado.escape.json_decode(self.request.body)
+        payload = tornado.escape.json_decode(self.request.body)
+        signature = base64.b64decode(
+                self.request.headers.get('Signature')
+                )
+
+        status = requests.get('https://api.travis-ci.org/config').json()
+        pubkey = status['config']['notifications']['webhook']['public_key']
+
+        public_key = crypto.load_publickey(crypto.FILETYPE_PEM, pubkey)
+        certificate = crypto.X509()
+        certificate.set_pubkey(public_key)
+
+        try:
+            crypto.verify(certificate, signature, payload, 'sha1')
+        except crypto.Error:
+            return self.write({'status': 'error',
+                               'message': 'Invalid signature for Travis ' \
+                                          'payload'})
+
+        status = ("error" if (payload["status"] == "1")
+                  else "success")
+        commit = payload["commit"]
+        repo = payload["repository"]["owner_name"] + "/" + \
+               payload["repository"]["name"]
+
+        gh = github.Github(config["github"]["personal_access_token"])
+        repo = gh.get_repo(repo)
+        commit = repo.get_commit(commit)
+        commit.create_status(
+                status,
+                target_url=payload["build_url"],
+                description='Dependent build completed',
+                context='continuous-integration/dependent-build-server')
 
 
 application = tornado.wsgi.WSGIApplication([
