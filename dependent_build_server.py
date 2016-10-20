@@ -59,7 +59,7 @@ class WebhookHandler(BaseHandler):
         personal_token = config['github']['personal_access_token']
 
         event_type = self.request.headers['X-GitHub-Event']
-        if event_type != 'pull_request':
+        if event_type not in ['pull_request', 'push']:
             return self.error('Unknown event sent to WebHook')
 
         pr = payload["pull_request"]
@@ -114,7 +114,7 @@ class WebhookHandler(BaseHandler):
             json=build)
 
         if r.status_code != 202:
-            self.error('Failed to create Travis-CI build')
+            return self.error('Failed to create Travis-CI build')
 
         commit.create_status(
                 'pending',
@@ -123,7 +123,7 @@ class WebhookHandler(BaseHandler):
                             'of {}'.format(dependent_repo),
                 context='continuous-integration/dependent-build-server')
 
-        self.write({'status': 'OK'})
+        self.success()
 
 
 class TravisHandler(BaseHandler):
