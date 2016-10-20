@@ -55,8 +55,7 @@ class WebhookHandler(BaseHandler):
             return self.error('Cannot validate GitHub payload with ' \
                                 'provided WebHook secret')
 
-        json = tornado.escape.json_decode(self.request.body)
-        payload = json["payload"]
+        payload = tornado.escape.json_decode(self.request.body)
         personal_token = config['github']['personal_access_token']
 
         event_type = self.request.headers['X-GitHub-Event']
