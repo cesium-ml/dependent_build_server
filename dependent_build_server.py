@@ -123,7 +123,7 @@ class WebhookHandler(BaseHandler):
                                 'of {}'.format(dependent_repo),
                     context='continuous-integration/dependent-build-server')
         else:
-            pass
+            self.error('Unknown event sent to WebHook')
 
         self.write({'status': 'OK'})
 
