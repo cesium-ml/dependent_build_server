@@ -27,29 +27,33 @@ def verify_signature(payload, signature, secret):
     return hmac.compare_digest(signature, expected)
 
 
-class MainHandler(tornado.web.RequestHandler):
+class BaseHandler(tornado.web.RequestHandler):
+    def error(self, message):
+        self.set_status(500)
+        self.write({'status': 'error', 'message': message})
+
+    def success(self, payload={}):
+        self.write({'status': 'success', 'data': payload})
+
+
+class MainHandler(BaseHandler):
     def get(self):
         self.write("Hello from Tornado")
 
 
-class WebhookHandler(tornado.web.RequestHandler):
+class WebhookHandler(BaseHandler):
     def get(self):
         self.write('Webhook alive and listening')
 
     def post(self):
         if not 'X-Hub-Signature' in self.request.headers:
-            return self.write({
-                'status': 'error',
-                'message': 'WebHook not configured with secret'
-                })
+            return self.error('WebHook not configured with secret')
 
         if not verify_signature(self.request.body,
                                 self.request.headers['X-Hub-Signature'],
                                 config['github']['webhook_secret']):
-            return self.write(
-                    {'status': 'error',
-                     'message': 'Cannot validate GitHub payload with ' \
-                                'provided WebHook secret'})
+            return self.error('Cannot validate GitHub payload with ' \
+                                'provided WebHook secret')
 
         json = tornado.escape.json_decode(self.request.body)
         payload = json["payload"]
@@ -68,9 +72,8 @@ class WebhookHandler(tornado.web.RequestHandler):
                               if d['source_repo'] == repo]
 
             if len(dependent_repo) == 0:
-                return self.write({'status': 'error',
-                                   'message': 'No dependent repo set for ' \
-                                              '{}'.format(repo)})
+                return self.error('No dependent repo set for ' \
+                                  '{}'.format(repo))
 
             # For now, we only support one triggered repo
             dependent_repo = dependent_repo[0]
@@ -112,8 +115,7 @@ class WebhookHandler(tornado.web.RequestHandler):
                 json=build)
 
             if r.status_code != 202:
-                self.write({'status': 'error',
-                            'message': 'Failed to create Travis-CI build'})
+                self.error('Failed to create Travis-CI build')
 
             commit.create_status(
                     'pending',
@@ -127,7 +129,7 @@ class WebhookHandler(tornado.web.RequestHandler):
         self.write({'status': 'OK'})
 
 
-class TravisHandler(tornado.web.RequestHandler):
+class TravisHandler(BaseHandler):
     def post(self):
         payload = tornado.escape.json_decode(self.request.body)
         signature = base64.b64decode(
@@ -144,9 +146,7 @@ class TravisHandler(tornado.web.RequestHandler):
         try:
             crypto.verify(certificate, signature, payload, 'sha1')
         except crypto.Error:
-            return self.write({'status': 'error',
-                               'message': 'Invalid signature for Travis ' \
-                                          'payload'})
+            return self.error('Invalid signature for Travis payload')
 
         status = ("error" if (payload["status"] == "1")
                   else "success")
