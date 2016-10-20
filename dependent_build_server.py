@@ -59,71 +59,69 @@ class WebhookHandler(BaseHandler):
         personal_token = config['github']['personal_access_token']
 
         event_type = self.request.headers['X-GitHub-Event']
+        if event_type != 'pull_request':
+            return self.error('Unknown event sent to WebHook')
 
+        pr = payload["pull_request"]
+        gh = github.Github(personal_token)
+        repo = gh.get_repo(pr["repo"]["full_name"])
+        commit = repo.get_commit(pr['head']['sha'])
 
-        if event_type == 'pull_request':
-            pr = payload["pull_request"]
-            gh = github.Github(personal_token)
-            repo = gh.get_repo(pr["repo"]["full_name"])
-            commit = repo.get_commit(pr['head']['sha'])
+        dependent_repo = [d['triggered_repo'] for d in config['dependent_repo']
+                          if d['source_repo'] == repo]
 
-            dependent_repo = [d['triggered_repo'] for d in config['dependent_repo']
-                              if d['source_repo'] == repo]
+        if len(dependent_repo) == 0:
+            return self.error('No dependent repo set for ' \
+                              '{}'.format(repo))
 
-            if len(dependent_repo) == 0:
-                return self.error('No dependent repo set for ' \
-                                  '{}'.format(repo))
+        # For now, we only support one triggered repo
+        dependent_repo = dependent_repo[0]
 
-            # For now, we only support one triggered repo
-            dependent_repo = dependent_repo[0]
+        travis_headers = {
+            'User-Agent': 'Travis-dependent_build_server/0.0'
+        }
+        travis_api = 'https://api.travis-ci.org'
 
-            travis_headers = {
-                'User-Agent': 'Travis-dependent_build_server/0.0'
-            }
-            travis_api = 'https://api.travis-ci.org'
+        travis_token = requests.post(
+                travis_api + '/auth/github',
+                headers=travis_headers,
+                json={'github_token': personal_token}).json()
+        travis_token = travis_token['access_token']
 
-            travis_token = requests.post(
-                    travis_api + '/auth/github',
-                    headers=travis_headers,
-                    json={'github_token': personal_token}).json()
-            travis_token = travis_token['access_token']
-
-            build = {
-                "request": {
-                    "message": "Build triggered by dependent_build_server",
-                    "branch": "master",
-                    "config": {
-                        "env": {
-                            "matrix": ["CESIUM_REPO={}".format(),
-                                       "CESIUM_SHA={}".format()]
-                        },
-                        "notifications": {
-                            "webhooks": [
-                                config['server']['url'] + '/travis'
-                                ],
-                        }
+        build = {
+            "request": {
+                "message": "Build triggered by dependent_build_server",
+                "branch": "master",
+                "config": {
+                    "env": {
+                        "matrix": ["CESIUM_REPO={}".format(),
+                                   "CESIUM_SHA={}".format()]
+                    },
+                    "notifications": {
+                        "webhooks": [
+                            config['server']['url'] + '/travis'
+                            ],
                     }
                 }
             }
+        }
 
-            r = requests.post(
-                travis_api + '/repo/' + \
-                repo.replace('/', '%2F') + '/requests',
-                headers={'Travis-API-Version': '3',
-                         'Authorization': 'token "{}"'.format(travis_token)},
-                json=build)
+        r = requests.post(
+            travis_api + '/repo/' + \
+            repo.replace('/', '%2F') + '/requests',
+            headers={'Travis-API-Version': '3',
+                     'Authorization': 'token "{}"'.format(travis_token)},
+            json=build)
 
-            if r.status_code != 202:
-                self.error('Failed to create Travis-CI build')
+        if r.status_code != 202:
+            self.error('Failed to create Travis-CI build')
 
-            commit.create_status(
-                    'pending',
-                    target_url='https://travis-ci.org/' + dependent_repo,
-                    description='Triggered Travis-CI build ' \
-                                'of {}'.format(dependent_repo),
-                    context='continuous-integration/dependent-build-server')
-        else:
-            self.error('Unknown event sent to WebHook')
+        commit.create_status(
+                'pending',
+                target_url='https://travis-ci.org/' + dependent_repo,
+                description='Triggered Travis-CI build ' \
+                            'of {}'.format(dependent_repo),
+                context='continuous-integration/dependent-build-server')
 
         self.write({'status': 'OK'})
 
