@@ -98,8 +98,8 @@ class WebhookHandler(BaseHandler):
                 "branch": "master",
                 "config": {
                     "env": {
-                        "matrix": ["CESIUM_REPO={}".format(),
-                                   "CESIUM_SHA={}".format()]
+                        "matrix": ["TRIGGERED_FROM_REPO={}".format(repo),
+                                   "TRIGGERED_FROM_SHA={}".format(commit)]
                     },
                     "notifications": {
                         "webhooks": [
