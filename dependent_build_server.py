@@ -22,7 +22,7 @@ config = toml.load('config.toml')
 
 def verify_signature(payload, signature, secret):
     expected = 'sha1=' + hmac.new(secret.encode('ascii'),
-                                  payload).hexdigest()
+                                  payload, 'sha1').hexdigest()
 
     return hmac.compare_digest(signature, expected)
 
