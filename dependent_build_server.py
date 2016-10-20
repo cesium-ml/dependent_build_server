@@ -33,8 +33,8 @@ class BaseHandler(tornado.web.RequestHandler):
         self.set_status(500)
         self.write({'status': 'error', 'message': message})
 
-    def success(self, payload={}):
-        self.write({'status': 'success', 'data': payload})
+    def success(self, message='', payload={}):
+        self.write({'status': 'success', 'message': message, 'data': payload})
 
 
 class MainHandler(BaseHandler):
@@ -60,7 +60,11 @@ class WebhookHandler(BaseHandler):
         personal_token = config['github']['personal_access_token']
 
         event_type = self.request.headers['X-GitHub-Event']
-        if event_type != 'pull_request':
+
+        if event_type == 'ping':
+            return self.success('Hello GitHub!')
+
+        elif event_type != 'pull_request':
             return self.error('Unknown event sent to WebHook--expecing '
                               'pull_request')
 
