@@ -67,15 +67,16 @@ class WebhookHandler(BaseHandler):
         pr = payload["pull_request"]
         gh = github.Github(personal_token)
 
-        repo_name = pr["head"]["repo"]["full_name"]
+        head_repo = pr["head"]["repo"]["full_name"]
+        base_repo = pr["base"]["repo"]["full_name"]
         commit_sha = pr['head']['sha']
 
-        repo = gh.get_repo(repo_name)
+        repo = gh.get_repo(head_repo)
         commit = repo.get_commit(commit_sha)
 
         dependent_repo = [
                 d['triggered_repo'] for d in config['dependent_repo']
-                if d['source_repo'] == pr["base"]["repo"]["full_name"]
+                if d['source_repo'] == base_repo
                 ]
 
         if len(dependent_repo) == 0:
@@ -102,7 +103,7 @@ class WebhookHandler(BaseHandler):
                 "branch": "master",
                 "config": {
                     "env": {
-                        "matrix": ["TRIGGERED_FROM_REPO={}".format(repo_name),
+                        "matrix": ["TRIGGERED_FROM_REPO={}".format(head_repo),
                                    "TRIGGERED_FROM_SHA={}".format(commit_sha)]
                     },
                     "notifications": {
@@ -116,7 +117,7 @@ class WebhookHandler(BaseHandler):
 
         r = requests.post(
             travis_api + '/repo/' + \
-            repo_name.replace('/', '%2F') + '/requests',
+            dependent_repo.replace('/', '%2F') + '/requests',
             headers={'Travis-API-Version': '3',
                      'Authorization': 'token "{}"'.format(travis_token)},
             json=build)
