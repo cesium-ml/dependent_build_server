@@ -74,6 +74,7 @@ class WebhookHandler(BaseHandler):
         head_repo = pr["head"]["repo"]["full_name"]
         base_repo = pr["base"]["repo"]["full_name"]
         commit_sha = pr['head']['sha']
+        commit_branch = pr['head']['ref']
 
         triggered_repo = [
                 d['triggered_repo'] for d in config['dependent_repo']
@@ -106,7 +107,8 @@ class WebhookHandler(BaseHandler):
                     "env": {
                         "global": [
                             "TRIGGERED_FROM_REPO={}".format(head_repo),
-                            "TRIGGERED_FROM_SHA={}".format(commit_sha)
+                            "TRIGGERED_FROM_SHA={}".format(commit_sha),
+                            "TRIGGERED_FROM_BRANCH={}".format(commit_branch)
                             ]
                     },
                     "notifications": {
