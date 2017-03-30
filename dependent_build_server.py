@@ -132,7 +132,7 @@ class WebhookHandler(BaseHandler):
 
 
         # Add CI status to PR
-        repo = gh.get_repo(base_repo)
+        repo = gh.get_repo(head_repo)
         commit = repo.get_commit(commit_sha)
         commit.create_status(
                 'pending',
