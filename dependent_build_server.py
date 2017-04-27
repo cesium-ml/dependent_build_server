@@ -172,8 +172,8 @@ class TravisHandler(BaseHandler):
         # Now decode and process
         payload = tornado.escape.json_decode(payload)
 
-        status = ("error" if (payload["status"] == "1")
-                  else "success")
+        status = ("success" if (payload["status"] == 0)
+                  else "error")
 
         sha = [f for f in payload["config"]["global_env"]
                if 'TRIGGERED_FROM_SHA' in f][0]
