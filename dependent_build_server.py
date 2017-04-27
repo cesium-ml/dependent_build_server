@@ -53,8 +53,8 @@ class WebhookHandler(BaseHandler):
         if not verify_signature(self.request.body,
                                 self.request.headers['X-Hub-Signature'],
                                 config['github']['webhook_secret']):
-            return self.error('Cannot validate GitHub payload with ' \
-                                'provided WebHook secret')
+            return self.error('Cannot validate GitHub payload with '
+                              'provided WebHook secret')
 
         payload = tornado.escape.json_decode(self.request.body)
         personal_token = config['github']['personal_access_token']
@@ -65,8 +65,8 @@ class WebhookHandler(BaseHandler):
             return self.success('Hello GitHub!')
 
         elif event_type != 'pull_request':
-            return self.error('Unknown event sent to WebHook--expecing '
-                              'pull_request')
+            return self.error('Unknown event sent to WebHook--expecting '
+                              '"pull_request" but got {}'.format(event_type))
 
         pr = payload["pull_request"]
         gh = github.Github(personal_token)
@@ -131,8 +131,9 @@ class WebhookHandler(BaseHandler):
             return self.error('Failed to create Travis-CI build')
 
 
-        # Add CI status to PR
-        repo = gh.get_repo(head_repo)
+        # Add CI status to PR; the status update is made on the repo
+        # *to which* the PR was made
+        repo = gh.get_repo(base_repo)
         commit = repo.get_commit(commit_sha)
         commit.create_status(
                 'pending',
