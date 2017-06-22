@@ -102,7 +102,6 @@ class WebhookHandler(BaseHandler):
         build = {
             "request": {
                 "message": "Build triggered by dependent build server from ({})".format(head_repo),
-                "message": "Build triggered by dependent_build_server",
                 "branch": "master",
                 "config": {
                     "env": {
